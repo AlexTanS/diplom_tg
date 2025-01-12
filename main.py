@@ -6,6 +6,7 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import CallbackQuery
 import aiohttp
 
 # @AlexTUrban_bot
@@ -26,6 +27,25 @@ kb = ReplyKeyboardMarkup(
     ],
     resize_keyboard=True
 )
+
+
+# def create_checkbox_keyboard():
+#     """Инлайн-клавиатура с чекбоксами"""
+#     inline_kb = InlineKeyboardMarkup(row_width=1)
+#     for s in services:
+#         checked = "🔲" if s not in get_selected_services() else "✅"
+#         callback_data = f"Услуга:{s}"
+#         inline_kb.insert(InlineKeyboardButton(text=f"{checked} {s}", callback_data=callback_data))
+#     inline_kb.row(InlineKeyboardButton(text="Далее", callback_data="next"))
+#     return inline_kb
+
+
+async def create_kb_inline():
+    list_service = get_list_services()
+    inline_kb = InlineKeyboardMarkup(row_width=1)
+    for s in list_service:
+        call_back_index = s[1]
+        inline_kb.insert(InlineKeyboardButton(text=s, callback_data=call_back_index))
 
 
 # kb_inline = InlineKeyboardMarkup(
@@ -51,17 +71,21 @@ async def post_to_api(session: aiohttp.ClientSession, url: str, payload: dict) -
             return None
 
 
+services = ["чай", "кофе", "wifi"]  # доступные сервисы
+
+
 async def get_list_services():
     """Создание списка дополнительных услуг"""
+    global services
     list_services = []
     async with aiohttp.ClientSession() as session:
         data = await fetch_json(session, api_address["list_of_services"])
         for d in data:
-            list_services.append(d["name"].title())
+            list_services.append((d["name"], d["id"]))  # список кортежей (имя, id)
     return list_services
 
 
-services = get_list_services()  # доступные сервисы
+# get_list_services()
 
 
 class UserState(StatesGroup):
@@ -70,30 +94,19 @@ class UserState(StatesGroup):
     password = State()  # пароль учетной записи
 
 
-def create_checkbox_keyboard():
-    """Инлайн-клавиатура с чекбоксами"""
-    inline_kb = InlineKeyboardMarkup(row_width=1)
-    for s in services:
-        checked = "🔲" if s not in get_selected_services() else "✅"
-        callback_data = f"Услуга: {s}"
-        inline_kb.insert(InlineKeyboardButton(text=f"{checked} {s}", callback_data=callback_data))
-    inline_kb.row(InlineKeyboardButton(text="Далее", callback_data="next"))
-    return inline_kb
+# async def get_selected_services():
+#     """Список выбранных опций"""
+#     return (await dp.current_state()).get_data().get("selected_options", [])
 
 
-def get_selected_services():
-    """Список выбранных опций"""
-    return dp.current_state().get_data().get("selected_options", [])
-
-
-async def update_selected_options(option):
-    """Обновление списка выбранных опций"""
-    selected_services = get_selected_services()
-    if option in selected_services:
-        selected_services.remove(option)
-    else:
-        selected_services.append(option)
-    await dp.current_state().update_data(selected_options=selected_services)
+# async def update_selected_options(option):
+#     """Обновление списка выбранных опций"""
+#     selected_services = await get_selected_services()
+#     if option in selected_services:
+#         selected_services.remove(option)
+#     else:
+#         selected_services.append(option)
+#     await (await dp.current_state()).update_data(selected_options=selected_services)
 
 
 @dp.message_handler(commands=["start"])
@@ -101,41 +114,41 @@ async def start(message: Message):
     await message.answer("Привет, я бот, помогающий приобрести допуслуги", reply_markup=kb)
 
 
-@dp.message_handler(text="Приобрести услугу")
-async def set_id_ticket(message: Message):
-    await message.answer("Введите номер своего билета:")
-    await UserState.id_ticket.set()
-
-
-@dp.message_handler(state=UserState.id_ticket)
-async def set_password(message: Message, state):
-    await state.update_data(id_ticket=message.text)
-    await message.answer("Введите пароль от учетной записи:")
-    await UserState.password.set()
-
-
-@dp.message_handler(state=UserState.password)
-async def end_services(message: Message, state):
-    await state.update_data(password=message.text)
-
-    payload = dict()
-    data = await state.get_data()
-    payload["id_ticket"] = str(data["id_ticket"])
-    payload["password"] = str(data["password"])
-
-    # отправка post запроса
-    async with aiohttp.ClientSession() as session:
-        data = await post_to_api(session, api_address["service"], payload)
-
-    if data is not None:  # получаю словарь с ответом {'test': 'test', 'test2': 'test2'}
-        # await message.answer(str(data))
-        pass
-    else:
-        await message.answer("Произошла ошибка при отправке запроса.")
-
-    await message.answer("Результат запроса СДЕЛАТЬ", reply_markup=kb_inline)
-
-    await state.finish()
+# @dp.message_handler(text="Приобрести услугу")
+# async def set_id_ticket(message: Message):
+#     await message.answer("Введите номер своего билета:")
+#     await UserState.id_ticket.set()
+#
+#
+# @dp.message_handler(state=UserState.id_ticket)
+# async def set_password(message: Message, state):
+#     await state.update_data(id_ticket=message.text)
+#     await message.answer("Введите пароль от учетной записи:")
+#     await UserState.password.set()
+#
+#
+# @dp.message_handler(state=UserState.password)
+# async def end_services(message: Message, state):
+#     await state.update_data(password=message.text)
+#
+#     payload = dict()
+#     data = await state.get_data()
+#     payload["id_ticket"] = str(data["id_ticket"])
+#     payload["password"] = str(data["password"])
+#
+#     # отправка post запроса
+#     async with aiohttp.ClientSession() as session:
+#         data = await post_to_api(session, api_address["service"], payload)
+#
+#     if data is not None:  # получаю словарь с ответом {'test': 'test', 'test2': 'test2'}
+#         # await message.answer(str(data))
+#         pass
+#     else:
+#         await message.answer("Произошла ошибка при отправке запроса.")
+#
+#     await message.answer("Результат запроса СДЕЛАТЬ", reply_markup=kb_inline)
+#
+#     await state.finish()
 
 
 @dp.message_handler(text="Информация")
@@ -159,10 +172,14 @@ async def start(message: Message):
     await message.answer("Введите команду /start чтобы начать общение")
 
 
-async def main():
-    await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
+# async def main():
+#     await bot.delete_webhook(drop_pending_updates=True)
+#     await dp.start_polling(bot)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    from aiogram.utils import executor
+
+    executor.start_polling(dp, skip_updates=True)
+
+    # asyncio.run(main())
